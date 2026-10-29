@@ -1,0 +1,22 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    credentialsId: 'github-creds',
+                    url: 'https://github.com/saisampathjaya/sample-app.git'
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh 'pwd'
+                sh 'ls -la'
+                sh 'git --version'
+            }
+        }
+    }
+}
