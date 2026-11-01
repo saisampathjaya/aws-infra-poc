@@ -1,93 +1,67 @@
-pipeline {
-    agent {
-        label 'kaniko'
-    }
+stage('Build and Push Image') {
+    steps {
+        container('kaniko') {
 
-    environment {
-        AWS_REGION = 'ap-south-1'
-        ECR_REPO = '667523685556.dkr.ecr.ap-south-1.amazonaws.com/sample-app-repo'
-    }
+            withCredentials([
+                usernamePassword(
+                    credentialsId: 'aws-accesskey',
+                    usernameVariable: 'AWS_ACCESS_KEY_ID',
+                    passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                )
+            ]) {
 
-    stages {
-
-        stage('Checkout Application Repo') {
-            steps {
-                git branch: 'main',
-                    credentialsId: 'git',
-                    url: 'https://github.com/saisampathjaya/aws-infra-poc.git'
-            }
-        }
-
-        stage('Build and Push Image') {
-            steps {
-                container('kaniko') {
-
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: 'aws-accesskey',
-                            usernameVariable: 'AWS_ACCESS_KEY_ID',
-                            passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                        )
-                    ]) {
-
-                        dir('sample-app') {
-
-                            sh """
-                            /kaniko/executor \
-                              --context=\$(pwd) \
-                              --dockerfile=Dockerfile \
-                              --destination=${ECR_REPO}:${BUILD_NUMBER}
-                            """
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Update GitOps Repo') {
-            steps {
-
-                dir('gitops') {
-
-                    git branch: 'main',
-                        credentialsId: 'git',
-                        url: 'https://github.com/saisampathjaya/sample-app-gitops.git'
+                dir('sample-app') {
 
                     sh """
-                    sed -i 's/tag:.*/tag: "${BUILD_NUMBER}"/' helm/sample-app/values.yaml
-
-                    git config user.email "jenkins@example.com"
-                    git config user.name "jenkins"
-
-                    git add .
-                    git commit -m "Update image tag ${BUILD_NUMBER}" || true
+                    /kaniko/executor \
+                      --context=\$(pwd) \
+                      --dockerfile=Dockerfile \
+                      --destination=${ECR_REPO}:${BUILD_NUMBER}
                     """
-
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: 'git',
-                            usernameVariable: 'GIT_USERNAME',
-                            passwordVariable: 'GIT_PASSWORD'
-                        )
-                    ]) {
-
-                        sh """
-                        git remote set-url origin https://\${GIT_USERNAME}:\${GIT_PASSWORD}@github.com/saisampathjaya/sample-app-gitops.git
-                        git push origin HEAD:main
-                        """
-                    }
                 }
             }
         }
     }
+}
 
-    post {
-        success {
-            echo "Pipeline completed successfully"
-        }
+stage('Manual Approval') {
+    steps {
+        input message: 'Approve deployment to proceed?', ok: 'Deploy'
+    }
+}
 
-        failure {
-            echo "Pipeline failed"
+stage('Update GitOps Repo') {
+    steps {
+
+        dir('gitops') {
+
+            git branch: 'main',
+                credentialsId: 'git',
+                url: 'https://github.com/saisampathjaya/sample-app-gitops.git'
+
+            sh """
+            sed -i 's/tag:.*/tag: "${BUILD_NUMBER}"/' helm/sample-app/values.yaml
+
+            git config user.email "jenkins@example.com"
+            git config user.name "jenkins"
+
+            git add .
+            git commit -m "Update image tag ${BUILD_NUMBER}" || true
+            """
+
+            withCredentials([
+                usernamePassword(
+                    credentialsId: 'git',
+                    usernameVariable: 'GIT_USERNAME',
+                    passwordVariable: 'GIT_PASSWORD'
+                )
+            ]) {
+
+                sh """
+                git remote set-url origin https://\${GIT_USERNAME}:\${GIT_PASSWORD}@github.com/saisampathjaya/sample-app-gitops.git
+                git push origin HEAD:main
+                """
+            }
         }
     }
 }
