@@ -18,7 +18,7 @@ pipeline {
             }
         }
 
-        /*
+        
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -35,7 +35,7 @@ pipeline {
                 }
             }
         }
-        */
+        
 
         stage('Trivy IaC Scan') {
             steps {
