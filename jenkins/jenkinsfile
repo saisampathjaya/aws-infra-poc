@@ -17,7 +17,7 @@ pipeline {
                     url: 'https://github.com/saisampathjaya/aws-infra-poc.git'
             }
         }
-
+         \*
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -33,7 +33,7 @@ pipeline {
                     }
                 }
             }
-        }
+        } \*
 
         stage('Trivy Repo Scan') {
             steps {
