@@ -26,9 +26,9 @@ pipeline {
                     withSonarQubeEnv('sonarqube') {
                         sh """
                         ${scannerHome}/bin/sonar-scanner \
-                        -Dsonar.projectKey=aws-infra-poc \
-                        -Dsonar.sources=. \
-                        -Dsonar.sourceEncoding=UTF-8
+                          -Dsonar.projectKey=aws-infra-poc \
+                          -Dsonar.sources=. \
+                          -Dsonar.sourceEncoding=UTF-8
                         """
                     }
                 }
@@ -47,4 +47,102 @@ pipeline {
                     echo "===== Trivy Repository Scan Report ====="
                     cat trivy-repo-report.txt
                     '''
-      
+                }
+            }
+        }
+
+        stage('Trivy Helm Scan') {
+            steps {
+                container('trivy') {
+                    sh '''
+                    trivy config helm/ \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 0 \
+                      -f table > trivy-helm-report.txt
+
+                    echo "===== Trivy Helm Scan Report ====="
+                    cat trivy-helm-report.txt
+                    '''
+                }
+            }
+        }
+
+        stage('Build and Push Image') {
+            steps {
+                container('kaniko') {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'aws-accesskey',
+                            usernameVariable: 'AWS_ACCESS_KEY_ID',
+                            passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                        )
+                    ]) {
+                        dir('sample-app') {
+                            sh """
+                            /kaniko/executor \
+                              --context=\$(pwd) \
+                              --dockerfile=Dockerfile \
+                              --destination=${ECR_REPO}:${BUILD_NUMBER}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Manual Approval') {
+            steps {
+                input message: 'Approve deployment?', ok: 'Deploy'
+            }
+        }
+
+        stage('Update GitOps Repo') {
+            steps {
+                dir('gitops') {
+
+                    git branch: 'main',
+                        credentialsId: 'git',
+                        url: 'https://github.com/saisampathjaya/sample-app-gitops.git'
+
+                    sh """
+                    sed -i 's/tag:.*/tag: "${BUILD_NUMBER}"/' helm/sample-app/values.yaml
+
+                    git config user.email "jenkins@example.com"
+                    git config user.name "jenkins"
+
+                    git add .
+                    git commit -m "Update image tag ${BUILD_NUMBER}" || true
+                    """
+
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'git',
+                            usernameVariable: 'GIT_USERNAME',
+                            passwordVariable: 'GIT_PASSWORD'
+                        )
+                    ]) {
+                        sh """
+                        git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/saisampathjaya/sample-app-gitops.git
+                        git push origin HEAD:main
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+
+        always {
+            archiveArtifacts artifacts: 'trivy-*.txt', allowEmptyArchive: true
+        }
+
+        success {
+            echo 'Pipeline completed successfully'
+        }
+
+        failure {
+            echo 'Pipeline failed'
+        }
+    }
+}
