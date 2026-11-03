@@ -53,11 +53,21 @@ pipeline {
             }
         }
 
+        stage('Checkout GitOps Repo') {
+            steps {
+                dir('sample-app-gitops') {
+                    git branch: 'main',
+                        credentialsId: 'git',
+                        url: 'https://github.com/saisampathjaya/sample-app-gitops.git'
+                }
+            }
+        }
+
         stage('Trivy Helm Scan') {
             steps {
                 container('trivy') {
                     sh '''
-                    trivy config sample-app-gitops/helm/sample-app/templates \
+                    trivy config sample-app-gitops/helm/sample-app \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
                       -f table > trivy-helm-report.txt
