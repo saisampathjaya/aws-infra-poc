@@ -33,7 +33,8 @@ pipeline {
                     }
                 }
             }
-        } \*
+        } 
+*/
 
         stage('Trivy Repo Scan') {
             steps {
