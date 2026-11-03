@@ -20,12 +20,17 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonarqube') {
-                    sh '''
-                    sonar-scanner \
-                      -Dsonar.projectKey=aws-infra-poc \
-                      -Dsonar.sources=.
-                    '''
+                script {
+                    def scannerHome = tool 'sonar-scanner'
+
+                    withSonarQubeEnv('sonarqube') {
+                        sh """
+                        ${scannerHome}/bin/sonar-scanner \
+                          -Dsonar.projectKey=aws-infra-poc \
+                          -Dsonar.sources=. \
+                          -Dsonar.sourceEncoding=UTF-8
+                        """
+                    }
                 }
             }
         }
@@ -33,7 +38,6 @@ pipeline {
         stage('Build and Push Image') {
             steps {
                 container('kaniko') {
-
                     withCredentials([
                         usernamePassword(
                             credentialsId: 'aws-accesskey',
@@ -41,9 +45,7 @@ pipeline {
                             passwordVariable: 'AWS_SECRET_ACCESS_KEY'
                         )
                     ]) {
-
                         dir('sample-app') {
-
                             sh """
                             /kaniko/executor \
                               --context=\$(pwd) \
@@ -64,7 +66,6 @@ pipeline {
 
         stage('Update GitOps Repo') {
             steps {
-
                 dir('gitops') {
 
                     git branch: 'main',
@@ -88,7 +89,6 @@ pipeline {
                             passwordVariable: 'GIT_PASSWORD'
                         )
                     ]) {
-
                         sh """
                         git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/saisampathjaya/sample-app-gitops.git
                         git push origin HEAD:main
