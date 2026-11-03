@@ -57,7 +57,7 @@ pipeline {
             steps {
                 container('trivy') {
                     sh '''
-                    trivy config helm/sample-app-gitops/helm/sample-app/templates \
+                    trivy config sample-app-gitops/helm/sample-app/templates \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
                       -f table > trivy-helm-report.txt
