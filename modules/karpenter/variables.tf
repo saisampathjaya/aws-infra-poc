@@ -1,0 +1,15 @@
+variable "cluster_name" {
+  type = string
+}
+
+variable "queue_name" {
+  type = string
+}
+
+variable "oidc_provider_arn" {
+  type = string
+}
+
+variable "oidc_issuer" {
+  type = string
+}

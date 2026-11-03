@@ -1,0 +1,14 @@
+replicaCount: 2
+
+image:
+  repository: 667523685556.dkr.ecr.ap-south-1.amazonaws.com/sample-app-repo
+  tag: latest
+
+service:
+  type: NodePort
+  port: 80
+
+ingress:
+  enabled: true
+  className: alb
+  host: sample-app.example.com

@@ -1,21 +1,125 @@
 pipeline {
+
     agent any
+
+    environment {
+
+        AWS_REGION = "ap-south-1"
+        ACCOUNT_ID = "667523685556"
+
+        APP_REPO = "sample-app"
+
+        ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/sample-app"
+
+        IMAGE_TAG = "${BUILD_NUMBER}"
+    }
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout Application') {
+
             steps {
+
                 git branch: 'main',
                     credentialsId: 'github-creds',
                     url: 'https://github.com/saisampathjaya/sample-app.git'
             }
         }
 
-        stage('Verify') {
+        stage('Build Image') {
+
             steps {
-                sh 'pwd'
-                sh 'ls -la'
-                sh 'git --version'
+
+                sh """
+                docker build -t sample-app:${IMAGE_TAG} .
+                """
+            }
+        }
+
+        stage('Login ECR') {
+
+            steps {
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-creds',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
+
+                    sh """
+                    aws ecr get-login-password \
+                    --region ${AWS_REGION} | \
+                    docker login \
+                    --username AWS \
+                    --password-stdin \
+                    ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    """
+                }
+            }
+        }
+
+        stage('Push Image') {
+
+            steps {
+
+                sh """
+                docker tag sample-app:${IMAGE_TAG} \
+                ${ECR_REPO}:${IMAGE_TAG}
+
+                docker push \
+                ${ECR_REPO}:${IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Checkout GitOps Repo') {
+
+            steps {
+
+                dir('gitops') {
+
+                    git branch: 'main',
+                        credentialsId: 'github-creds',
+                        url: 'https://github.com/saisampathjaya/gitops-repo.git'
+                }
+            }
+        }
+
+        stage('Update Helm Values') {
+
+            steps {
+
+                dir('gitops/sample-app') {
+
+                    sh """
+                    sed -i 's/tag:.*/tag: "${IMAGE_TAG}"/' values.yaml
+
+                    cat values.yaml
+                    """
+                }
+            }
+        }
+
+        stage('Push GitOps Change') {
+
+            steps {
+
+                dir('gitops') {
+
+                    sh """
+                    git config user.email "jenkins@example.com"
+
+                    git config user.name "jenkins"
+
+                    git add .
+
+                    git commit -m "update image ${IMAGE_TAG}" || true
+
+                    git push
+                    """
+                }
             }
         }
     }
