@@ -24,9 +24,7 @@ pipeline {
                     sh '''
                     sonar-scanner \
                       -Dsonar.projectKey=aws-infra-poc \
-                      -Dsonar.sources=. \
-                      -Dsonar.host.url=$SONAR_HOST_URL \
-                      -Dsonar.token=$SONAR_AUTH_TOKEN
+                      -Dsonar.sources=.
                     '''
                 }
             }
@@ -64,4 +62,50 @@ pipeline {
             }
         }
 
-        stage('Update GitOps Repo')
+        stage('Update GitOps Repo') {
+            steps {
+
+                dir('gitops') {
+
+                    git branch: 'main',
+                        credentialsId: 'git',
+                        url: 'https://github.com/saisampathjaya/sample-app-gitops.git'
+
+                    sh """
+                    sed -i 's/tag:.*/tag: "${BUILD_NUMBER}"/' helm/sample-app/values.yaml
+
+                    git config user.email "jenkins@example.com"
+                    git config user.name "jenkins"
+
+                    git add .
+                    git commit -m "Update image tag ${BUILD_NUMBER}" || true
+                    """
+
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'git',
+                            usernameVariable: 'GIT_USERNAME',
+                            passwordVariable: 'GIT_PASSWORD'
+                        )
+                    ]) {
+
+                        sh """
+                        git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/saisampathjaya/sample-app-gitops.git
+                        git push origin HEAD:main
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline completed successfully'
+        }
+
+        failure {
+            echo 'Pipeline failed'
+        }
+    }
+}
